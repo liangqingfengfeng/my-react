@@ -28,8 +28,7 @@ function myTypeof(obj) {
     return Object.prototype.toString.call(obj).slice(8, -1);
 }
 
-function render(element, continer) {
-    console.log(element)
+function createDom(fiber) {
     const dom =
         element.type === 'TEXT_ELEMENT'
             ? document.createTextNode('')
@@ -41,16 +40,84 @@ function render(element, continer) {
         .forEach(name => {
             dom[name] = element.props[name]
         })
+
+    return dom;
+}
+
+function render(element, continer) {
+    wipRoot = {
+        dom: continer,
+        props: {
+            children: [element]
+        }
+    }
+    nextUnitOfWork = wipRoot
+}
+
+function commitRoot() {
     
-    if (myTypeof(element.props.children) === 'Array') {
-        element.props.children.forEach(child => render(child, dom))
-    } else {
-        const element = document.createTextNode(element.props.children);
-        dom.appendChild(element);
+}
+
+let nextUnitOfWork = null;
+let wipRoot = null
+
+function wookLoop(deadLine) {
+    let shouldYield = false;
+
+    while (nextUnitOfWork && !shouldYield) {
+        nextUnitOfWork = performUnitOfWork(nextUnitOfWork);
+    }
+    shouldYield = deadLine.timeRemaining() < 1;
+
+    if (!nextUnitOfWork && wipRoot) {
+        commitRoot()
+    }
+    requestIdleCallback(wookLoop);
+}
+
+requestIdleCallback(wookLoop)
+
+function performUnitOfWork(fiber) {
+    // add dom node
+    // 创建dom
+    if (!fiber.dom) {
+        fiber.dom = createDom(fiber);
+    }
+
+    // create new fibers
+    // 遍历创建child fiber
+    const elements = fiber.props.children;
+    let index = 0;
+    let prevSibling = null;
+
+    while (index < elements.length) {
+        const element = elements[index];
+        const newFiber = {
+            type: element.type,
+            props: element.props,
+            parent: fiber,
+            dom: null,
+        }
+        if (index === 0) {
+            fiber.child = newFiber;
+        } else {
+            prevSibling.sibling = newFiber
+        }
+        prevSibling = newFiber;
+        index++
     }
     
-
-    continer.appendChild(dom);
+    // return next unit of work
+    if (fiber.child) {
+        return fiber.child;
+    }
+    let nextFiber = fiber;
+    while (nextFiber) {
+        if (nextFiber.sibling) {
+            return nextFiber.sibling;
+        }
+        nextFiber = nextFiber.parent
+    }
 }
 
 const Didact = {
